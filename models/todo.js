@@ -10,27 +10,16 @@ module.exports = (sequelize, DataTypes) => {
     static associate(models) {
       // define association here
     }
+
     static addTodo({ title, dueDate }) {
       return this.create({ title: title, dueDate: dueDate, completed: false });
-    }
-
-    static getTodos() {
-      return this.findAll();
     }
 
     markAsCompleted() {
       return this.update({ completed: true });
     }
-
-    static async overdue() {
-      return this.findAll({
-        where: {
-          dueDate: {
-            [Op.lt]: new Date(),
-          },
-          completed: false,
-        },
-      });
+    static getTodos() {
+      return this.findAll({ order: [["id", "ASC"]] });
     }
   }
   Todo.init(

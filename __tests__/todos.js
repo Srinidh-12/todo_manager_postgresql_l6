@@ -1,87 +1,78 @@
-const request = require("supertest");
+const express = require("express");
+const app = express();
+const { Todo } = require("./models");
+const bodyParser = require("body-parser");
+app.use(bodyParser.json());
+app.set("view engine", "ejs");
+// app.use(express.static(path.join(__dirname + "/public")));
+app.use(express.static("public"));
 
-const db = require("../models/index");
-const app = require("../app");
-
-let server, agent;
-
-describe("Todo Application", function () {
-  beforeAll(async () => {
-    await db.sequelize.sync({ force: true });
-    server = app.listen(3000, () => {});
-    agent = request.agent(server);
-  });
-
-  afterAll(async () => {
-    try {
-      await db.sequelize.close();
-      await server.close();
-    } catch (error) {
-      console.log(error);
-    }
-  });
-
-  test("Creates a todo and responds with json at /todos POST endpoint", async () => {
-    const response = await agent.post("/todos").send({
-      title: "Buy milk",
-      dueDate: new Date().toISOString(),
-      completed: false,
+app.get("/", async (request, response)=>{
+  // response.send("Hello World");
+  const allTodosAre = await Todo.getTodos();
+  if (request.accepts("html")) {
+    response.render("index", {
+      allTodosAre,
     });
-    expect(response.statusCode).toBe(200);
-    expect(response.header["content-type"]).toBe(
-      "application/json; charset=utf-8"
-    );
-    const parsedResponse = JSON.parse(response.text);
-    expect(parsedResponse.id).toBeDefined();
-  });
-
-  test("Marks a todo with the given ID as complete", async () => {
-    const response = await agent.post("/todos").send({
-      title: "Buy milk",
-      dueDate: new Date().toISOString(),
-      completed: false,
-    });
-    const parsedResponse = JSON.parse(response.text);
-    const todoID = parsedResponse.id;
-
-    expect(parsedResponse.completed).toBe(false);
-
-    const markCompleteResponse = await agent
-      .put(`/todos/${todoID}/markASCompleted`)
-      .send();
-    const parsedUpdateResponse = JSON.parse(markCompleteResponse.text);
-    expect(parsedUpdateResponse.completed).toBe(true);
-  });
-
-  test("Fetches all todos in the database using /todos endpoint", async () => {
-    await agent.post("/todos").send({
-      title: "Buy xbox",
-      dueDate: new Date().toISOString(),
-      completed: false,
-    });
-    await agent.post("/todos").send({
-      title: "Buy ps3",
-      dueDate: new Date().toISOString(),
-      completed: false,
-    });
-    const response = await agent.get("/todos");
-    const parsedResponse = JSON.parse(response.text);
-
-    expect(parsedResponse.length).toBe(4);
-    expect(parsedResponse[3]["title"]).toBe("Buy ps3");
-  });
-
-  test("Delete todo using ID", async () => {
-    const response = await agent.post("/todos").send({
-      title: "Delete todo",
-      dueDate: new Date().toISOString(),
-      completed: false,
-    });
-    const parsedResponse = JSON.parse(response.text);
-    const todoID = parsedResponse.id;
-    expect(parsedResponse.title).toBe("Delete todo");
-    const deletetodo = await agent.delete(`/todos/${todoID}`);
-    const parsedremoveResponse = JSON.parse(deletetodo.text);
-    expect(parsedremoveResponse).toBe(true);
-  });
+  } else {
+    response.json(allTodosAre);
+  }
 });
+
+app.get("/todos", async function (_request, response) {
+  console.log("Processing list of all Todos are ........");
+  // FILL IN YOUR CODE HERE
+  try {
+    const todo = await Todo.findAll();
+    return response.send(todo);
+  } catch (error) {
+    console.log(error);
+    return response.status(422).json(error);
+  }
+  // First, we have to query our PostgerSQL database using Sequelize to get list of all Todos.
+  // Then, we have to respond with all Todos, like:
+  // response.send(todos)
+});
+
+app.get("/todos/:id", async function (request, response) {
+  try {
+    const todo = await Todo.findByPk(request.params.id);
+    return response.json(todo);
+  } catch (error) {
+    console.log(error);
+    return response.status(422).json(error);
+  }
+});
+
+app.post("/todos", async function (request, response) {
+  try {
+    const todo = await Todo.addTodo(request.body);
+    return response.json(todo);
+  } catch (error) {
+    console.log(error);
+    return response.status(422).json(error);
+  }
+});
+
+app.put("/todos/:id/markAsCompleted", async function (request, response) {
+  const todo = await Todo.findByPk(request.params.id);
+  try {
+    const updatedTodo = await todo.markAsCompleted();
+    return response.json(updatedTodo);
+  } catch (error) {
+    console.log(error);
+    return response.status(422).json(error);
+  }
+});
+
+app.delete("/todos/:id", async function (request, response) {
+  console.log("We have to delete a Todo with ID: ", request.params.id);
+  // FILL IN YOUR CODE HERE
+  const deleteTodo = await Todo.destroy({ where: { id: request.params.id } });
+  response.send(deleteTodo ? true : false);
+  // First, we have to query our database to delete a Todo by ID.
+  // Then, we have to respond back with true/false based on whether the Todo was deleted or not.
+  // response.send(true)
+});
+
+module.exports = app;
